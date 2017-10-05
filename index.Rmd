@@ -1,0 +1,226 @@
+---
+title: "20 Years of Games - EDA"
+author: "GSD"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    fig_width: 8
+    fig_height: 8
+    toc: yes
+    theme: cerulean
+    highlight: kate
+    
+
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+```
+
+#Motivation:
+
+This dataset is an list of video game sales collated from 1980 till present date and contains the data of the game release year,rank,sales by region,platform of release among other data.Some of the critical questions we seek to answer include 
+
+1.Region having highest sales by game
+
+2.Top genre of game release and their trend over year
+
+3.Publisher and platform which dominates the gaming industry
+
+4.Sales analysis of publishers and platform
+
+```{r}
+library(tidyverse)
+library(reshape2)
+library(ggrepel)
+library(viridis)
+library(ggcorrplot)
+library(gridExtra)
+
+game=read.csv("vgsales.csv",header=TRUE)
+dim(game)
+glimpse(game)
+```
+
+
+# Which publisher has released most of the video games ?
+
+```{r}
+game = game[!(game$Year %in% c("N/A","2017","2020")),]
+temp = subset(game,select=c(Publisher,Year,Name))
+length(unique(temp$Publisher))
+temp = temp  %>% group_by(Publisher) %>% summarise(count=n()) %>% arrange(desc(count))
+ggplot(head(temp,10),aes(reorder(Publisher,count),count,fill=Publisher))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust=0.5),legend.position="none")+ggtitle("Top 10 game release platforms over the year")+coord_flip()+labs(x="Platform",y="Count")
+```
+
+
+Electronic Arts is the top gaming release platform followed by Activision and Namco Bandai Games.
+
+# Sales Trend across the market over the year
+
+```{r}
+NAsale=game %>% select(NA_Sales,Year) %>%  group_by(Year) %>% summarise(NA_Total=sum(NA_Sales))
+EUsale=game %>% select(EU_Sales,Year) %>%  group_by(Year) %>% summarise(EU_Total=sum(EU_Sales))
+JPsale=game %>% select(JP_Sales,Year) %>%  group_by(Year) %>% summarise(JP_Total=sum(JP_Sales))
+othersale=game %>% select(Other_Sales,Year) %>%  group_by(Year) %>% summarise(Other_Total=sum(Other_Sales))
+globalsale=game %>% select(Global_Sales,Year) %>%  group_by(Year) %>% summarise(Global_Total=sum(Global_Sales))
+require(plyr)
+temp=join_all(list(NAsale,EUsale,JPsale,othersale,globalsale),by="Year",type="left")
+detach("package:plyr",TRUE)
+temp=gather(temp,"sale","value",2:6)
+ggplot(temp,aes(Year,value,color=sale,group=sale))+geom_path(size=1)+theme(axis.text.x = element_text(angle=90,vjust=0.5),plot.title = element_text(hjust=0.5,color="red",face="italic"),axis.title.y=element_blank(),legend.position="right")+ggtitle("Sales over the year ")+labs(x="Year",y="Sales",color="Sale")+guides(size=guide_legend(order=1))
+```
+
+> The sales trend indicates that while the EU sales has increased over the year,there has been a decline in the year 2000.Its peak sales has been reported in the year 2008.
+
+> Sales seems to be picked up in Japan from the year 1995 and seems to be peaked at 2008.
+
+> It can be seen that the year 2008 year was watershead year for gaming year since the global sale for the industry was at all time high.
+ 
+> Sales seems to be in the downward trend after 2008 and the trend is continuing till 2015..
+
+
+# In which genre has most of the games released?
+
+
+```{r}
+temp=game %>% select(Genre,Name) %>% group_by(Genre) %>% summarise(count=n()) %>% arrange(desc(count))
+temp$percentage= round((temp$count/sum(temp$count))*100,digits=2)
+ggplot(temp,aes(Genre,count,fill=Genre))+geom_bar(stat="identity")+geom_label(aes(label=temp$percentage),size=2)+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),legend.position="none")+ggtitle("Genre with most game releases")+labs(x="Genre",y="Count")
+```
+
+> 19.9 % of the total games released were from Action genre followed by Sports contributing to 14.12% of the games.While 10.5% of the games were released under Miscellaneous category , a mear 3.5 % constitute puzzle category.
+
+# How has the trend been over the years?
+
+```{r,fig.height=12}
+temp = game %>% select(Genre,Year) 
+require(plyr)
+temp=ddply(temp,.(Genre,Year),transform,count=length(Genre))
+temp=unique(temp)
+detach('package:plyr',TRUE)
+ggplot(temp,aes(Year,count,group=1,color=Genre))+geom_line(size=2)+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),legend.position="none")+ggtitle("Trend of Game release by Genre")+labs(x="Year",y="Count")+facet_wrap(~Genre,scales='free_y',ncol=1)
+```
+
+> Action games seemes to have increased only after 1997.There is an upward trend till 2013 after which there is a fall.An interesting thing to note here is the dominance of the Action games in the year 2012 where other genre releases have shown a downward trend compared to previous year ,Action games seemes  to  have a spike from previous year.
+
+> There were no games released under Strategy genre till the year 1991.
+
+> The year 2003 seems to have been dominated by Racing genre and there is a big fall in Adverture games that year.
+
+> Between the year 2008 and 2009 , Simulation games were released more which was joined by Fighting games.
+
+# Which has been the most profitable genre ?
+
+```{r}
+temp = game %>% select(Genre,Global_Sales,Year)
+ggplot(temp,aes(Genre,Global_Sales,fill=Genre))+geom_boxplot(stat="boxplot",position="dodge",outlier.color="red")+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),plot.subtitle = element_text(hjust=0.5,face='bold'),legend.position="bottom")+ggtitle("Trend of Overall Sales")+labs(x="Genre",y="Sales(in Millions)",subtitle="Global Revenue")+scale_y_log10()
+```
+
+Platform games have highest median revenue followed by Sports.
+
+# Which genre dominates in every region ?
+
+```{r}
+temp=game %>% select(Genre,EU_Sales,JP_Sales,NA_Sales,Global_Sales,Other_Sales)
+temp=gather(temp,region,sales,2:6)
+ggplot(temp,aes(region,sales,fill=Genre))+geom_bar(stat="identity",position=position_dodge())+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),legend.position="bottom")+ggtitle("Regional Sales Trend")+labs(x="Region",y="Sales(in Millions)")
+```
+
+
+Clearly,Sports is dominating the Global Sales.Individually , it has minted out higher in Europe,and North America.In Japan,Role Playing games have more value for money.While,racing games comes second in Europe,in North America,Platform games occuply the second slot. 
+
+Comparing the regional sales,Japan market has higher scope for improvement since the sales coming out of Japan is very low compared to other regions.
+
+# Which game has minted out highest revenue ?
+
+```{r}
+temp = game %>% select(Name,Global_Sales,Publisher) %>% arrange(desc(Global_Sales)) 
+
+ggplot(head(temp,20),aes(factor(Name,levels=Name),Global_Sales,fill=Publisher))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),legend.position="bottom")+ggtitle("Top 20 high value games")+labs(x="Game",y="Sales(in Millions)")
+```
+
+Clearly,Nintendo dominates the market with 17 of the 20 top games released.It has all the favourites like `Duck Hunt` ,`Mario` ....This is followed by Take-Two Interactive with the famous `GTA` game.
+
+# Which games dominate regions ??
+
+```{r,fig.width=8,fig.height=20}
+JPsale=game %>% select(Name,JP_Sales,Publisher)  %>% arrange(desc(JP_Sales))
+g1=ggplot(head(JPsale,10),aes(factor(Name,levels=Name),JP_Sales,fill=Publisher))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),plot.subtitle = element_text(hjust=0.5,face='bold'),legend.position="bottom")+ggtitle("Top 10 high value games")+labs(x="Game",y="Sales(in Millions)",subtitle="Japan Region")
+EUsale=game %>% select(Name,EU_Sales,Publisher)  %>% arrange(desc(EU_Sales))
+g2=ggplot(head(EUsale,10),aes(factor(Name,levels=Name),EU_Sales,fill=Publisher))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),plot.subtitle = element_text(hjust=0.5,face='bold'),legend.position="bottom")+ggtitle("Top 10 high value games")+labs(x="Game",y="Sales(in Millions)",subtitle="Europe Region")
+NAsale=game %>% select(Name,NA_Sales,Publisher)  %>% arrange(desc(NA_Sales))
+g3=ggplot(head(NAsale,10),aes(factor(Name,levels=Name),NA_Sales,fill=Publisher))+geom_bar(stat="identity")+theme(axis.text.x = element_text(angle=90,vjust=0.3),plot.title = element_text(hjust=0.5,face='italic'),plot.subtitle = element_text(hjust=0.5,face='bold'),legend.position="bottom")+ggtitle("Top 10 high value games")+labs(x="Game",y="Sales(in Millions)",subtitle="North America Region")
+grid.arrange(g1,g2,g3,ncol=1,heights=c(30,25,30),name="Game Sales")
+```
+
+
+# Analysis of Platform over the years 
+
+```{r}
+top10platform=game %>% group_by(Platform) %>% summarise(count=n()) %>% arrange(desc(count)) %>% head(10)
+temp=game[game$Platform %in% top10platform$Platform,]
+temp = temp %>% group_by(Platform,Year) %>% summarise(count=n()) 
+ggplot(temp,aes(Year,Platform,fill=count))+geom_tile(color="white",size=0.4)+theme(axis.text.x = element_text(size=10,hjust=0.5),plot.title=element_text(hjust=0.5,face='italic'),legend.position="bottom",strip.text = element_text(hjust = 0.01, face = "bold", size = 14),legend.key.width = unit(3, "cm"))+ggtitle("Trend of Game release Platform over the year")+scale_fill_viridis(
+  name="count", 
+  option = 'C', 
+  direction = -1, 
+  na.value = "grey",
+  limits = c(0, max(temp$count)))
+```
+
+
+#Analysis of Publishers over the year 
+
+```{r,fig.width=13,fig.height=8}
+top10pub=game %>% group_by(Publisher) %>% summarise(count=n()) %>% arrange(desc(count)) %>% head(10)
+temp=game[game$Publisher %in% top10pub$Publisher,]
+temp = temp %>% group_by(Publisher,Year) %>% summarize(count=n()) 
+ggplot(temp,aes(Year,Publisher,fill=count))+geom_tile(color="white",size=0.4)+theme(axis.text.x = element_text(size=10,hjust=0.5),plot.title=element_text(hjust=0.5,face='italic'),legend.position="bottom",legend.key.width = unit(3, "cm"))+ggtitle("Publisher Game release trend over the year")+scale_fill_viridis(
+  name="count", 
+  option = 'C', 
+  direction = -1, 
+  na.value = "white",
+  limits = c(0, max(temp$count)))
+```
+
+
+> Activision is the oldest publisher in the market.
+
+> Ubisoft , EA ,Take-Two Inteactive are siginifant new players in the market which have established dominance over other stragetic old players.
+
+# Does higher game release indicate higher revenue ? 
+
+In other words,do the number of release by a publisher correlate by the total revenue by publisher?
+
+```{r}
+temp= game[game$Publisher %in% top10pub$Publisher,]
+temp = temp %>% group_by(Publisher) %>% summarise(totalsale=sum(Global_Sales)) %>% arrange(desc(totalsale))
+temp = merge(top10pub,temp,by="Publisher")
+ggplot(temp,aes(x=count,y=totalsale,col=factor(Publisher),size=totalsale))+
+geom_point(alpha=0.4)+theme(legend.position="bottom",plot.title = element_text(size=10,hjust=0.5))+labs(title="Number of Games Vs Total Sales",col="Publisher")
+
+```
+
+
+It can be seen from the graph that there exists no correlation between the total sales and number of games released.
+
+# Conclusion 
+
+Below is the gist of all the insights gathered from the dataset:
+
+* Electronic Arts is the top gaming release platform followed by Activision and Namco Bandai Games.
+
+* Sales seems to be in the downward trend after 2008 and the trend is continuing till 2015
+
+* 19.9 % of the total games released were from Action genre followed by Sports contributing to 14.12% of the games.
+
+* The dominance of the Action games in the year 2012 where other genre releases have shown a downward trend compared to previous year ,Action games seemes  to  have a spike from previous year.
+
+* Sports is dominating the Global Sales.Individually , it has minted out higher in Europe,and North America.In Japan,Role Playing games have more value for money.While,racing games comes second in Europe,in North America,Platform games occuply the second slot.
+
+* Nintendo dominates the market with 17 of the 20 top games released.
+
+* There exists no correlation between the total sales and number of games released.
+
